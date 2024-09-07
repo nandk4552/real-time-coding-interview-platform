@@ -1,8 +1,30 @@
 const { Server } = require("socket.io");
-
-const io = new Server(8000, {
-  cors: true,
-});
+const express = require("express");
+const cors = require("cors");
+const dotenv = require("dotenv");
+dotenv.config();
+const app = express();
+const PORT = process.env.PORT || 8000;
+app.use(
+  cors({
+    origin: "*", // Allow all origins, you can restrict it by specifying allowed domains
+    methods: ["GET", "POST"],
+    allowedHeaders: ["Content-Type"],
+  })
+);
+// Initialize server on port 8000
+const io = new Server(
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  }),
+  {
+    cors: {
+      origin: "*",
+      methods: ["GET", "POST"],
+      allowedHeaders: ["Content-Type"],
+    },
+  }
+);
 
 const emailToSocketIdMap = new Map();
 const socketidToEmailMap = new Map();

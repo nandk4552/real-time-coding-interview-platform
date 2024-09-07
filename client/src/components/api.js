@@ -2,7 +2,7 @@ import axios from "axios";
 import { LANGUAGE_VERSIONS } from "../../constants";
 
 const API = axios.create({
-  baseURL: "https://emkc.org/api/v2/piston",
+  baseURL: import.meta.env.VITE_PISTON_API,
 });
 export const excuteCode = async (language, sourceCode) => {
   const res = await API.post("/execute", {
