@@ -2,19 +2,13 @@ import React, { useState, useCallback, useEffect } from "react";
 import { useSocket } from "../context/SocketProvider";
 import { useNavigate } from "react-router-dom";
 import { z } from "zod";
+import { v4 as uuid } from "uuid";
+import toast from "react-hot-toast";
 
 // zod schema for form validation
 const formSchema = z.object({
   email: z.string().email({ message: "Invalid email format" }),
-  room: z
-    .string()
-    .min(1, { message: "Room number is required" })
-    .refine((val) => !isNaN(parseInt(val)), {
-      message: "Room number must be a number",
-    })
-    .refine((val) => Number.isInteger(Number(val)), {
-      message: "Room number must be an integer",
-    }),
+  room: z.string().min(1, { message: "Room number is required" }),
 });
 
 const LobbyScreen = () => {
@@ -24,9 +18,20 @@ const LobbyScreen = () => {
   const navigate = useNavigate();
   const socket = useSocket();
 
+  const createNewRoom = (e) => {
+    e.preventDefault();
+    const id = uuid();
+    setRoom(id);
+    toast.success("Created new Room ID successfully!");
+  };
+
   const handleSubmitForm = useCallback(
     (e) => {
       e.preventDefault();
+      if (!room || !email) {
+        toast.error("All fields are required!");
+        return;
+      }
 
       // Validate form data using Zod
       const validationResult = formSchema.safeParse({ email, room });
@@ -53,7 +58,11 @@ const LobbyScreen = () => {
   const handleJoinRoom = useCallback(
     (data) => {
       const { room } = data;
-      return navigate(`/room/${room}`);
+      return navigate(`/room/${room}`, {
+        state: {
+          email,
+        },
+      });
     },
     [navigate]
   );
@@ -64,6 +73,12 @@ const LobbyScreen = () => {
       socket.off("room:join");
     };
   }, [socket, handleJoinRoom]);
+
+  const handleInputEnter = (e) => {
+    if (e.code === "Enter") {
+      handleJoinRoom();
+    }
+  };
 
   return (
     <div className="flex justify-center items-center min-h-screen bg-gray-900 text-white">
@@ -83,6 +98,7 @@ const LobbyScreen = () => {
               name="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              onKeyUp={handleInputEnter}
               className="w-full p-3 rounded-md bg-gray-700 text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-green-500"
               placeholder="Enter your email"
               required
@@ -102,6 +118,7 @@ const LobbyScreen = () => {
               id="room"
               name="room"
               value={room}
+              onKeyUp={handleInputEnter}
               onChange={(e) => setRoom(e.target.value)}
               className="w-full p-3 rounded-md bg-gray-700 text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-green-500"
               placeholder="Enter interview room number"
@@ -110,6 +127,18 @@ const LobbyScreen = () => {
             {errors?.room && (
               <p className="text-red-500 text-sm mt-1">{errors?.room}</p>
             )}
+          </div>
+          <div>
+            <span className="my-3">
+              if you don't have an invite then create &nbsp;
+              <a
+                className="text-green-500 underline"
+                onClick={createNewRoom}
+                href=""
+              >
+                new room
+              </a>
+            </span>
           </div>
 
           {/* Join Button */}

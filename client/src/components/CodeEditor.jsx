@@ -7,9 +7,24 @@ import Output from "./Output";
 import { excuteCode } from "./api";
 import peer from "../services/peer";
 import { useSocket } from "../context/SocketProvider";
-
+import Client from "./Client";
+import toast from "react-hot-toast";
+import { useNavigate } from "react-router-dom";
+const debounce = (func, delay) => {
+  let timeoutId;
+  return (...args) => {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+    timeoutId = setTimeout(() => {
+      func(...args);
+    }, delay);
+  };
+};
 const CodeEditor = () => {
+  const navigate = useNavigate();
   const editorRef = useRef();
+  const roomId = window.location.href.split("/room/")[1];
   const [value, setValue] = useState("");
   const [language, setLanguage] = useState("javascript");
   const [isLoading, setIsLoading] = useState(false);
@@ -21,6 +36,8 @@ const CodeEditor = () => {
   const [remoteSocketId, setRemoteSocketId] = useState(null);
   const [myStream, setMyStream] = useState();
   const [remoteStream, setRemoteStream] = useState();
+
+  const [clients, setclients] = useState([]);
 
   // Handle user joining the room
   const handleUserJoined = useCallback(({ email, id }) => {
@@ -90,21 +107,116 @@ const CodeEditor = () => {
     });
   }, []);
 
+  const handleClientsJoinedInRoom = useCallback(
+    ({ clients, email, socketId }) => {
+      if (email !== location.state?.email) {
+        toast.success(`${email} joined the room`);
+        console.log(`${email} joined the room}`);
+      }
+      setclients(clients);
+    },
+    []
+  );
+
+  const handleUserLeft = useCallback(({ email, id }) => {
+    toast.success(`${email} has left the room`);
+
+    // Remove the user from the clients array
+    setclients((prevClients) => {
+      const updatedClients = prevClients.filter(
+        (client) => client.socketId !== id
+      );
+      console.log("Updated clients: ", updatedClients); // Check if the user is removed
+      return updatedClients;
+    });
+  }, []);
+
   useEffect(() => {
     socket.on("user:joined", handleUserJoined);
     socket.on("incomming:call", handleIncommingCall);
     socket.on("call:accepted", handleCallAccepted);
+    socket.on("room:joined", handleClientsJoinedInRoom);
+    socket.on("user:left", handleUserLeft);
+
     return () => {
       socket.off("user:joined", handleUserJoined);
       socket.off("incomming:call", handleIncommingCall);
       socket.off("call:accepted", handleCallAccepted);
+      socket.off("room:joined", handleClientsJoinedInRoom);
+      socket.off("user:left", handleUserLeft);
     };
-  }, [socket, handleUserJoined, handleIncommingCall, handleCallAccepted]);
+  }, [
+    socket,
+    handleUserJoined,
+    handleIncommingCall,
+    handleCallAccepted,
+    handleClientsJoinedInRoom,
+    handleUserLeft,
+  ]);
 
   const onMount = (editor) => {
     editorRef.current = editor;
     editor.focus();
+    console.log("curr editor", editor);
+    // Listen for content changes
+    editor.onDidChangeModelContent((event) => {
+      const code = editor.getValue();
+      const cursorPosition = editor.getPosition();
+      console.log("new val", code);
+      handleCodeChange(code, cursorPosition); // Send changes for sync or further processing
+    });
   };
+
+  // Function to handle code change, debounced to reduce unnecessary socket emissions
+  const handleCodeChange = useCallback(
+    debounce((code) => {
+      const editorInstance = editorRef.current;
+      if (editorInstance) {
+        // Get the current cursor position before updating the state
+        const currentCursorPosition = editorInstance.getPosition();
+        setValue(code);
+
+        // Emit code change and cursor position if it's not a remote update
+        socket.emit("code:change", {
+          roomId,
+          code,
+          cursorPosition: {
+            lineNumber: currentCursorPosition.lineNumber,
+            column: currentCursorPosition.column,
+          },
+        });
+
+        // Restore the cursor position after updating
+        editorInstance.setPosition(currentCursorPosition);
+      }
+    }, 1),
+    [socket]
+  );
+
+  // Handle real-time code updates from other users
+  useEffect(() => {
+    socket.on("code:change", ({ code, cursorPosition }) => {
+      if (editorRef.current) {
+        if (code !== editorRef.current.getValue()) {
+          setValue(code);
+          editorRef.current.setValue(code); // Update the editor
+
+          // Ensure cursorPosition is in the correct format before setting
+          if (
+            cursorPosition &&
+            typeof cursorPosition.lineNumber === "number" &&
+            typeof cursorPosition.column === "number"
+          ) {
+            editorRef.current.setPosition(cursorPosition); // Set the cursor position
+          }
+        }
+      }
+    });
+
+    return () => {
+      socket.off("code:change");
+    };
+  }, [socket]);
 
   const onSelect = (language) => {
     setLanguage(language);
@@ -128,23 +240,29 @@ const CodeEditor = () => {
     }
   };
 
-  // Synchronize code changes in real-time using WebSockets
-  useEffect(() => {
-    socket.on("code:update", (newValue) => {
-      setValue(newValue);
-      if (editorRef.current) {
-        editorRef.current.setValue(newValue); // Update editor content
-      }
-    });
-
-    return () => {
-      socket.off("code:update");
-    };
-  }, [socket]);
-  const handleCodeChange = (newValue) => {
-    setValue(newValue);
-    socket.emit("code:change", { value: newValue }); // Broadcast code change to other users
+  // Copy Room ID functionality
+  const copyRoomId = () => {
+    navigator.clipboard
+      .writeText(window.location.href.split("/room/")[1])
+      .then(() => {
+        toast.success("Room ID copied to clipboard!");
+      })
+      .catch((err) => {
+        toast.error("Failed to copy Room ID.");
+      });
   };
+
+  // Leave Room functionality
+  const leaveRoom = () => {
+    socket.emit("user:disconnect");
+    // Optionally redirect or clear state
+    navigate("/");
+    setRemoteSocketId(null);
+    setMyStream(null);
+    setRemoteStream(null);
+    setclients([]);
+  };
+
   return (
     <div className="p-6 bg-gray-900 dark:bg-gray-900 min-h-screen text-white">
       <div className="max-w-7xl mx-auto grid lg:grid-cols-4 grid-cols-1 gap-6">
@@ -170,16 +288,6 @@ const CodeEditor = () => {
 
           {/* Code Editor */}
           <div className="mb-4">
-            {/* <Editor
-              height="60vh"
-              theme="vs-dark"
-              language={language}
-              defaultValue={CODE_SNIPPETS[language]}
-              onMount={onMount}
-              value={value}
-              onChange={(v) => setValue(v)}
-              className="rounded-lg"
-            /> */}
             <Editor
               height="60vh"
               theme="vs-dark"
@@ -202,6 +310,12 @@ const CodeEditor = () => {
           <h4 className="text-xl mb-6">
             {remoteSocketId ? "Connected" : "No one in the room"}
           </h4>
+          <div className="clientList flex items-center space-x-2">
+            {clients.map(({ socketId, email }) => (
+              <Client email={email} key={socketId} />
+            ))}
+          </div>
+
           <div className="flex space-x-4 mb-6">
             {myStream && (
               <button
@@ -223,7 +337,7 @@ const CodeEditor = () => {
           {myStream && (
             <div className="bg-gray-800 p-4 rounded-lg shadow-lg">
               <h2 className="text-2xl font-semibold mb-4 text-center">
-                Candidate
+                Interviewer
               </h2>
               <ReactPlayer
                 playing
@@ -238,7 +352,7 @@ const CodeEditor = () => {
           {remoteStream && (
             <div className="bg-gray-800 p-4 rounded-lg shadow-lg">
               <h2 className="text-2xl font-semibold mb-4 text-center">
-                Interviewer
+                Candidate
               </h2>
               <ReactPlayer
                 playing
@@ -249,6 +363,20 @@ const CodeEditor = () => {
               />
             </div>
           )}
+          <div className="flex space-x-4">
+            <button
+              onClick={copyRoomId}
+              className="bg-blue-500 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-blue-600 transition duration-300 ease-in-out"
+            >
+              Copy Room ID
+            </button>
+            <button
+              onClick={leaveRoom}
+              className="bg-red-500 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-red-600 transition duration-300 ease-in-out"
+            >
+              Leave
+            </button>
+          </div>
         </div>
       </div>
     </div>
