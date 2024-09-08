@@ -41,6 +41,7 @@ const CodeEditor = () => {
 
   // Handle user joining the room
   const handleUserJoined = useCallback(({ email, id }) => {
+    toast.success(`${email} joined room successfully`);
     console.log(`Email ${email} joined room`);
     setRemoteSocketId(id);
   }, []);
@@ -255,6 +256,7 @@ const CodeEditor = () => {
   // Leave Room functionality
   const leaveRoom = () => {
     toast.success("Leaving room...");
+
     socket.emit("user:disconnect");
     setRemoteSocketId(null);
     setMyStream(null);
@@ -270,13 +272,15 @@ const CodeEditor = () => {
         <div className="lg:col-span-3 bg-gray-800 rounded-lg shadow-lg p-6">
           <div className="flex justify-between items-center mb-6">
             <div className="flex items-center space-x-2">
-              <span className="text-gray-300 font-semibold">Language:</span>
+              <span className="text-gray-300 font-semibold hidden md:inline">
+                Language:
+              </span>
               <LanguageSelector language={language} onSelect={onSelect} />
             </div>
             <button
               onClick={runCode}
               disabled={isLoading}
-              className={`py-2 px-4 text-sm rounded-lg shadow-md transition duration-300 ease-in-out ${
+              className={`py-1 px-3 md:py-2 md:px-4 text-sm rounded-lg shadow-md transition duration-300 ease-in-out ${
                 isLoading
                   ? "bg-gray-500 text-gray-400 cursor-not-allowed"
                   : "bg-green-500 hover:bg-green-600 text-white"
@@ -329,7 +333,7 @@ const CodeEditor = () => {
               <div className="relative rounded-md overflow-hidden shadow-inner">
                 <ReactPlayer
                   playing
-                  height="100%"
+                  height="240px"
                   width="100%"
                   url={myStream}
                   className="rounded-md"
@@ -347,7 +351,7 @@ const CodeEditor = () => {
               <div className="relative rounded-md overflow-hidden shadow-inner">
                 <ReactPlayer
                   playing
-                  height="100%"
+                  height="240px"
                   width="100%"
                   url={remoteStream}
                   className="rounded-md"
