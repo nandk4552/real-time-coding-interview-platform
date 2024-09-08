@@ -11,7 +11,7 @@ const App = () => {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gray-900 text-gray-500 px-5 py-8">
+    <div className="min-h-screen bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 bg-gray-900 text-gray-500 px-5 py-0 sm:py-8">
       <Routes>
         {/* Lobby Screen Route */}
         <Route path="/" element={<LobbyScreen />} />

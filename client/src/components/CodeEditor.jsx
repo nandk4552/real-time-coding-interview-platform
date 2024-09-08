@@ -254,21 +254,21 @@ const CodeEditor = () => {
 
   // Leave Room functionality
   const leaveRoom = () => {
+    toast.success("Leaving room...");
     socket.emit("user:disconnect");
-    // Optionally redirect or clear state
-    navigate("/");
     setRemoteSocketId(null);
     setMyStream(null);
     setRemoteStream(null);
     setclients([]);
+    navigate("/");
   };
 
   return (
-    <div className="p-6 bg-gray-900 dark:bg-gray-900 min-h-screen text-white">
+    <div className="p-0 sm:px-3 sm:py-0 bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 min-h-screen text-white">
       <div className="max-w-7xl mx-auto grid lg:grid-cols-4 grid-cols-1 gap-6">
-        {/* Left side: Code Editor and Language Selector */}
+        {/* Left Side: Code Editor and Output */}
         <div className="lg:col-span-3 bg-gray-800 rounded-lg shadow-lg p-6">
-          <div className="flex justify-between mb-4">
+          <div className="flex justify-between items-center mb-6">
             <div className="flex items-center space-x-2">
               <span className="text-gray-300 font-semibold">Language:</span>
               <LanguageSelector language={language} onSelect={onSelect} />
@@ -295,28 +295,89 @@ const CodeEditor = () => {
               value={value}
               onMount={onMount}
               onChange={handleCodeChange} // Trigger code change handling
-              className="rounded-lg"
+              className="rounded-lg border border-gray-700"
             />
           </div>
 
-          {/* Output Component */}
+          {/* Output Section */}
           <div className="bg-gray-700 p-4 rounded-lg border border-gray-600 shadow-sm">
             <Output output={output} isError={isError} isLoading={isLoading} />
           </div>
         </div>
 
-        {/* Right side: Video of interviewer and candidate */}
+        {/* Right Side: Video and Controls */}
         <div className="lg:col-span-1 space-y-6">
-          <h4 className="text-xl mb-6">
-            {remoteSocketId ? "Connected" : "No one in the room"}
+          {/* Room Controls: Copy & Leave */}
+          <div className="flex justify-center space-x-4">
+            <button
+              onClick={copyRoomId}
+              className="bg-blue-500 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-blue-600 transition duration-300 ease-in-out"
+            >
+              Copy Room ID
+            </button>
+            <button
+              onClick={leaveRoom}
+              className="bg-red-500 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-red-600 transition duration-300 ease-in-out"
+            >
+              Leave
+            </button>
+          </div>
+
+          {/* Stream View: Interviewer */}
+          {myStream && (
+            <div className="bg-gray-800 p-1 rounded-lg shadow-lg transform transition duration-300 ease-in-out hover:scale-105 relative">
+              <div className="relative rounded-md overflow-hidden shadow-inner">
+                <ReactPlayer
+                  playing
+                  height="100%"
+                  width="100%"
+                  url={myStream}
+                  className="rounded-md"
+                />
+                <h2 className="absolute top-0 left-0 right-0 text-2xl font-semibold text-center text-white opacity-70 p-2">
+                  Interviewer
+                </h2>
+              </div>
+            </div>
+          )}
+
+          {/* Stream View: Candidate */}
+          {remoteStream && (
+            <div className="bg-gray-800 p-1 rounded-lg shadow-lg transform transition duration-300 ease-in-out hover:scale-105 relative">
+              <div className="relative rounded-md overflow-hidden shadow-inner">
+                <ReactPlayer
+                  playing
+                  height="100%"
+                  width="100%"
+                  url={remoteStream}
+                  className="rounded-md"
+                />
+                <h2 className="absolute top-0 left-0 right-0 text-2xl font-semibold text-center text-white opacity-70 p-2">
+                  Candidate
+                </h2>
+              </div>
+            </div>
+          )}
+
+          <h4
+            className={`text-xl font-bold mb-6 text-center transition-all duration-300 ease-in-out transform ${
+              remoteSocketId
+                ? "text-green-400 opacity-50 animate-pulse"
+                : "text-red-500 opacity-50"
+            }`}
+          >
+            {remoteSocketId ? "✅ Connected" : "⚠️ No one in the room"}
           </h4>
-          <div className="clientList flex items-center space-x-2">
+
+          {/* Client List */}
+          <div className="flex items-center justify-center space-x-2 mx-auto">
             {clients.map(({ socketId, email }) => (
               <Client email={email} key={socketId} />
             ))}
           </div>
 
-          <div className="flex space-x-4 mb-6">
+          {/* Buttons: Send Stream & Call */}
+          <div className="flex space-x-4 justify-center mb-6">
             {myStream && (
               <button
                 onClick={sendStreams}
@@ -333,49 +394,6 @@ const CodeEditor = () => {
                 CALL
               </button>
             )}
-          </div>
-          {myStream && (
-            <div className="bg-gray-800 p-4 rounded-lg shadow-lg">
-              <h2 className="text-2xl font-semibold mb-4 text-center">
-                Interviewer
-              </h2>
-              <ReactPlayer
-                playing
-                height="240px"
-                width="100%"
-                url={myStream}
-                className="rounded-md"
-              />
-            </div>
-          )}
-
-          {remoteStream && (
-            <div className="bg-gray-800 p-4 rounded-lg shadow-lg">
-              <h2 className="text-2xl font-semibold mb-4 text-center">
-                Candidate
-              </h2>
-              <ReactPlayer
-                playing
-                height="240px"
-                width="100%"
-                url={remoteStream}
-                className="rounded-md"
-              />
-            </div>
-          )}
-          <div className="flex space-x-4">
-            <button
-              onClick={copyRoomId}
-              className="bg-blue-500 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-blue-600 transition duration-300 ease-in-out"
-            >
-              Copy Room ID
-            </button>
-            <button
-              onClick={leaveRoom}
-              className="bg-red-500 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-red-600 transition duration-300 ease-in-out"
-            >
-              Leave
-            </button>
           </div>
         </div>
       </div>

@@ -81,15 +81,18 @@ const LobbyScreen = () => {
   };
 
   return (
-    <div className="flex justify-center items-center min-h-screen bg-gray-900 text-white">
-      <div className="bg-gray-800 p-8 rounded-lg shadow-lg max-w-md w-full">
-        <h2 className="text-2xl font-semibold mb-6 text-center">
+    <div className="flex justify-center items-center min-h-screen bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 text-white px-4 sm:px-0 overflow-hidden">
+      <div className="bg-gray-800 p-6 sm:p-10 rounded-lg shadow-lg max-w-lg w-full transform transition duration-500 ">
+        <h2 className="text-2xl sm:text-3xl  font-bold mb-8 text-center text-green-500">
           Join an Interview Room
         </h2>
-        <form onSubmit={handleSubmitForm} className="space-y-4">
+        <form onSubmit={handleSubmitForm} className="space-y-6">
           {/* Email Field */}
           <div>
-            <label htmlFor="email" className="block text-sm font-medium mb-2">
+            <label
+              htmlFor="email"
+              className="block text-sm sm:text-md font-medium mb-2"
+            >
               Email ID:
             </label>
             <input
@@ -99,7 +102,7 @@ const LobbyScreen = () => {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               onKeyUp={handleInputEnter}
-              className="w-full p-3 rounded-md bg-gray-700 text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-green-500"
+              className="w-full p-3 rounded-lg bg-gray-700 text-white placeholder-gray-400 border border-gray-600 focus:outline-none focus:ring-4 focus:ring-green-500 focus:border-transparent transition duration-200 ease-in-out"
               placeholder="Enter your email"
               required
             />
@@ -110,7 +113,10 @@ const LobbyScreen = () => {
 
           {/* Room Number Field */}
           <div>
-            <label htmlFor="room" className="block text-sm font-medium mb-2">
+            <label
+              htmlFor="room"
+              className="block text-sm sm:text-md font-medium mb-2"
+            >
               Interview Room Number:
             </label>
             <input
@@ -120,7 +126,7 @@ const LobbyScreen = () => {
               value={room}
               onKeyUp={handleInputEnter}
               onChange={(e) => setRoom(e.target.value)}
-              className="w-full p-3 rounded-md bg-gray-700 text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-green-500"
+              className="w-full p-3 rounded-lg bg-gray-700 text-white placeholder-gray-400 border border-gray-600 focus:outline-none focus:ring-4 focus:ring-green-500 focus:border-transparent transition duration-200 ease-in-out"
               placeholder="Enter interview room number"
               required
             />
@@ -128,24 +134,24 @@ const LobbyScreen = () => {
               <p className="text-red-500 text-sm mt-1">{errors?.room}</p>
             )}
           </div>
-          <div>
-            <span className="my-3">
-              if you don't have an invite then create &nbsp;
-              <a
-                className="text-green-500 underline"
-                onClick={createNewRoom}
-                href=""
-              >
-                new room
-              </a>
-            </span>
+
+          {/* New Room Link */}
+          <div className="text-sm sm:text-lg text-gray-400 text-center">
+            Don't have an invite?&nbsp;
+            <a
+              onClick={createNewRoom}
+              href=""
+              className="text-green-500 text-sm sm:text-lg font-semibold underline hover:text-green-400 transition duration-300"
+            >
+              Create new room
+            </a>
           </div>
 
           {/* Join Button */}
           <div className="text-center">
             <button
               type="submit"
-              className="w-full py-3 bg-green-600 hover:bg-green-700 rounded-md font-semibold text-white transition duration-300 ease-in-out"
+              className="w-full py-3 bg-green-600 hover:bg-green-700 rounded-lg font-semibold text-white shadow-lg transition duration-300 transform hover:scale-105 ease-in-out"
             >
               Join Room
             </button>
