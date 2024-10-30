@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import CodeEditor from "./components/CodeEditor";
+import RoomScreen from "./components/RoomScreen";
 import { Route, Routes } from "react-router-dom";
 import LobbyScreen from "./screens/Lobby";
 import RoomPage from "./screens/Room";
@@ -17,7 +17,7 @@ const App = () => {
         <Route path="/" element={<LobbyScreen />} />
 
         {/* Room Page with Video Streaming + Code Editor */}
-        <Route path="/room/:roomId" element={<CodeEditor />} />
+        <Route path="/room/:roomId" element={<RoomScreen />} />
       </Routes>
     </div>
   );

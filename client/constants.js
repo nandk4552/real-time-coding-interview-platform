@@ -2,6 +2,7 @@ export const LANGUAGE_VERSIONS = {
   c: "10.2.0", // Updated version  csharp: "6.12.0",
   cpp: "10.2.0", // Updated version  python: "3.10.0",
   java: "15.0.2",
+  python: "3.10.0",
   javascript: "18.15.0",
   typescript: "5.0.3",
   php: "8.2.3",

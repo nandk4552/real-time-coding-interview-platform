@@ -1,408 +1,82 @@
-import React, { useEffect, useCallback, useRef, useState } from "react";
-import { Editor } from "@monaco-editor/react";
-import ReactPlayer from "react-player";
-import LanguageSelector from "./LanguageSelector";
-import { CODE_SNIPPETS } from "../../constants";
-import Output from "./Output";
-import { excuteCode } from "./api";
-import peer from "../services/peer";
-import { useSocket } from "../context/SocketProvider";
-import Client from "./Client";
-import toast from "react-hot-toast";
-import { useNavigate } from "react-router-dom";
-const debounce = (func, delay) => {
-  let timeoutId;
-  return (...args) => {
-    if (timeoutId) {
-      clearTimeout(timeoutId);
-    }
-    timeoutId = setTimeout(() => {
-      func(...args);
-    }, delay);
-  };
-};
-const CodeEditor = () => {
-  const navigate = useNavigate();
-  const editorRef = useRef();
-  const roomId = window.location.href.split("/room/")[1];
-  const [value, setValue] = useState("");
-  const [language, setLanguage] = useState("javascript");
-  const [isLoading, setIsLoading] = useState(false);
-  const [isError, setIsError] = useState(false);
-  const [output, setOutput] = useState(null);
+import React, {
+  useEffect,
+  useRef,
+  forwardRef,
+  useImperativeHandle,
+  useCallback,
+} from "react";
+import { EditorView, keymap, lineNumbers } from "@codemirror/view";
+import { EditorState } from "@codemirror/state";
+import { javascript } from "@codemirror/lang-javascript";
+import { oneDark } from "@codemirror/theme-one-dark";
+import { defaultKeymap, history } from "@codemirror/commands";
+import { autocompletion, closeBrackets } from "@codemirror/autocomplete";
+import { foldGutter, foldKeymap } from "@codemirror/language";
+import "./CodeEditor.css";
 
-  // WebRTC State
-  const socket = useSocket();
-  const [remoteSocketId, setRemoteSocketId] = useState(null);
-  const [myStream, setMyStream] = useState();
-  const [remoteStream, setRemoteStream] = useState();
+const CodeEditor = forwardRef(({ value, onChange }, codeMirrorRef) => {
+  const editorRef = useRef(null);
+  const viewRef = useRef(null);
 
-  const [clients, setclients] = useState([]);
+  useImperativeHandle(codeMirrorRef, () => ({
+    getCode: () => viewRef.current?.state.doc.toString() || "",
+  }));
 
-  // Handle user joining the room
-  const handleUserJoined = useCallback(({ email, id }) => {
-    toast.success(`${email} joined room successfully`);
-    console.log(`Email ${email} joined room`);
-    setRemoteSocketId(id);
-  }, []);
+  // Memoize the change handler to prevent it from being recreated
+  const handleEditorChange = useCallback(
+    (update) => {
+      if (update.docChanged) {
+        const code = update.state.doc.toString();
+        if (code !== value) onChange && onChange(code);
+      }
+    },
+    [onChange, value]
+  );
 
-  // Handle calling the other user
-  const handleCallUser = useCallback(async () => {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: true,
-      video: true,
+  useEffect(() => {
+    if (!editorRef.current) return;
+
+    const startState = EditorState.create({
+      doc: value || "// Start coding here!",
+      extensions: [
+        javascript(),
+        lineNumbers(),
+        oneDark,
+        history(),
+        keymap.of([...defaultKeymap, ...foldKeymap]),
+        foldGutter(),
+        autocompletion(),
+        closeBrackets(),
+        EditorView.lineWrapping,
+        EditorView.updateListener.of(handleEditorChange),
+      ],
     });
-    const offer = await peer.getOffer();
-    socket.emit("user:call", { to: remoteSocketId, offer });
-    setMyStream(stream);
-  }, [remoteSocketId, socket]);
 
-  // Handle incoming call
-  const handleIncommingCall = useCallback(
-    async ({ from, offer }) => {
-      setRemoteSocketId(from);
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
-        video: true,
+    if (!viewRef.current) {
+      viewRef.current = new EditorView({
+        state: startState,
+        parent: editorRef.current,
       });
-      setMyStream(stream);
-      const ans = await peer.getAnswer(offer);
-      socket.emit("call:accepted", { to: from, ans });
-    },
-    [socket]
-  );
-
-  // Send streams
-  const sendStreams = useCallback(() => {
-    for (const track of myStream.getTracks()) {
-      peer.peer.addTrack(track, myStream);
     }
-  }, [myStream]);
-
-  // Handle call accepted
-  const handleCallAccepted = useCallback(
-    ({ from, ans }) => {
-      peer.setLocalDescription(ans);
-      sendStreams();
-    },
-    [sendStreams]
-  );
-
-  // Handle negotiation needed
-  const handleNegoNeeded = useCallback(async () => {
-    const offer = await peer.getOffer();
-    socket.emit("peer:nego:needed", { offer, to: remoteSocketId });
-  }, [remoteSocketId, socket]);
-
-  useEffect(() => {
-    peer.peer.addEventListener("negotiationneeded", handleNegoNeeded);
-    return () => {
-      peer.peer.removeEventListener("negotiationneeded", handleNegoNeeded);
-    };
-  }, [handleNegoNeeded]);
-
-  useEffect(() => {
-    peer.peer.addEventListener("track", (ev) => {
-      const remoteStream = ev.streams;
-      setRemoteStream(remoteStream[0]);
-    });
-  }, []);
-
-  const handleClientsJoinedInRoom = useCallback(
-    ({ clients, email, socketId }) => {
-      if (email !== location.state?.email) {
-        toast.success(`${email} joined the room`);
-        console.log(`${email} joined the room}`);
-      }
-      setclients(clients);
-    },
-    []
-  );
-
-  const handleUserLeft = useCallback(({ email, id }) => {
-    toast.success(`${email} has left the room`);
-
-    // Remove the user from the clients array
-    setclients((prevClients) => {
-      const updatedClients = prevClients.filter(
-        (client) => client.socketId !== id
-      );
-      console.log("Updated clients: ", updatedClients); // Check if the user is removed
-      return updatedClients;
-    });
-  }, []);
-
-  useEffect(() => {
-    socket.on("user:joined", handleUserJoined);
-    socket.on("incomming:call", handleIncommingCall);
-    socket.on("call:accepted", handleCallAccepted);
-    socket.on("room:joined", handleClientsJoinedInRoom);
-    socket.on("user:left", handleUserLeft);
 
     return () => {
-      socket.off("user:joined", handleUserJoined);
-      socket.off("incomming:call", handleIncommingCall);
-      socket.off("call:accepted", handleCallAccepted);
-      socket.off("room:joined", handleClientsJoinedInRoom);
-      socket.off("user:left", handleUserLeft);
-    };
-  }, [
-    socket,
-    handleUserJoined,
-    handleIncommingCall,
-    handleCallAccepted,
-    handleClientsJoinedInRoom,
-    handleUserLeft,
-  ]);
-
-  const onMount = (editor) => {
-    editorRef.current = editor;
-    editor.focus();
-    console.log("curr editor", editor);
-    // Listen for content changes
-    editor.onDidChangeModelContent((event) => {
-      const code = editor.getValue();
-      const cursorPosition = editor.getPosition();
-      console.log("new val", code);
-      handleCodeChange(code, cursorPosition); // Send changes for sync or further processing
-    });
-  };
-
-  // Function to handle code change, debounced to reduce unnecessary socket emissions
-  const handleCodeChange = useCallback(
-    debounce((code) => {
-      const editorInstance = editorRef.current;
-      if (editorInstance) {
-        // Get the current cursor position before updating the state
-        const currentCursorPosition = editorInstance.getPosition();
-        setValue(code);
-
-        // Emit code change and cursor position if it's not a remote update
-        socket.emit("code:change", {
-          roomId,
-          code,
-          cursorPosition: {
-            lineNumber: currentCursorPosition.lineNumber,
-            column: currentCursorPosition.column,
-          },
-        });
-
-        // Restore the cursor position after updating
-        editorInstance.setPosition(currentCursorPosition);
+      if (viewRef.current) {
+        viewRef.current.destroy();
+        viewRef.current = null;
       }
-    }, 1),
-    [socket]
-  );
+    };
+  }, [handleEditorChange]);
 
-  // Handle real-time code updates from other users
   useEffect(() => {
-    socket.on("code:change", ({ code, cursorPosition }) => {
-      if (editorRef.current) {
-        if (code !== editorRef.current.getValue()) {
-          setValue(code);
-          editorRef.current.setValue(code); // Update the editor
-
-          // Ensure cursorPosition is in the correct format before setting
-          if (
-            cursorPosition &&
-            typeof cursorPosition.lineNumber === "number" &&
-            typeof cursorPosition.column === "number"
-          ) {
-            editorRef.current.setPosition(cursorPosition); // Set the cursor position
-          }
-        }
-      }
-    });
-
-    return () => {
-      socket.off("code:change");
-    };
-  }, [socket]);
-
-  const onSelect = (language) => {
-    setLanguage(language);
-    setValue(CODE_SNIPPETS[language]);
-  };
-
-  const runCode = async () => {
-    const sourceCode = editorRef.current.getValue();
-    if (!sourceCode) return;
-
-    try {
-      setIsLoading(true);
-      const { run: result } = await excuteCode(language, sourceCode);
-      setOutput(result.output.split("\n"));
-      result.stderr ? setIsError(true) : setIsError(false);
-    } catch (error) {
-      console.log(error);
-      alert(`An error occurred: ${error.message || "Unable to run code"}`);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Copy Room ID functionality
-  const copyRoomId = () => {
-    navigator.clipboard
-      .writeText(window.location.href.split("/room/")[1])
-      .then(() => {
-        toast.success("Room ID copied to clipboard!");
-      })
-      .catch((err) => {
-        toast.error("Failed to copy Room ID.");
+    const currentDoc = viewRef.current?.state.doc.toString();
+    if (viewRef.current && value !== currentDoc) {
+      viewRef.current.dispatch({
+        changes: { from: 0, to: currentDoc.length, insert: value },
       });
-  };
+    }
+  }, [value]);
 
-  // Leave Room functionality
-  const leaveRoom = () => {
-    toast.success("Leaving room...");
-
-    socket.emit("user:disconnect");
-    setRemoteSocketId(null);
-    setMyStream(null);
-    setRemoteStream(null);
-    setclients([]);
-    navigate("/");
-  };
-
-  return (
-    <div className="p-0 sm:px-3 sm:py-0 bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 min-h-screen text-white">
-      <div className="max-w-7xl mx-auto grid lg:grid-cols-4 grid-cols-1 gap-6">
-        {/* Left Side: Code Editor and Output */}
-        <div className="lg:col-span-3 bg-gray-800 rounded-lg shadow-lg p-6">
-          <div className="flex justify-between items-center mb-6">
-            <div className="flex items-center space-x-2">
-              <span className="text-gray-300 font-semibold hidden md:inline">
-                Language:
-              </span>
-              <LanguageSelector language={language} onSelect={onSelect} />
-            </div>
-            <button
-              onClick={runCode}
-              disabled={isLoading}
-              className={`py-1 px-3 md:py-2 md:px-4 text-sm rounded-lg shadow-md transition duration-300 ease-in-out ${
-                isLoading
-                  ? "bg-gray-500 text-gray-400 cursor-not-allowed"
-                  : "bg-green-500 hover:bg-green-600 text-white"
-              }`}
-            >
-              {isLoading ? "Running..." : "Run Code"}
-            </button>
-          </div>
-
-          {/* Code Editor */}
-          <div className="mb-4">
-            <Editor
-              height="60vh"
-              theme="vs-dark"
-              language={language}
-              value={value}
-              onMount={onMount}
-              onChange={handleCodeChange} // Trigger code change handling
-              className="rounded-lg border border-gray-700"
-            />
-          </div>
-
-          {/* Output Section */}
-          <div className="bg-gray-700 p-4 rounded-lg border border-gray-600 shadow-sm">
-            <Output output={output} isError={isError} isLoading={isLoading} />
-          </div>
-        </div>
-
-        {/* Right Side: Video and Controls */}
-        <div className="lg:col-span-1 space-y-6">
-          {/* Room Controls: Copy & Leave */}
-          <div className="flex justify-center space-x-4">
-            <button
-              onClick={copyRoomId}
-              className="bg-blue-500 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-blue-600 transition duration-300 ease-in-out"
-            >
-              Copy Room ID
-            </button>
-            <button
-              onClick={leaveRoom}
-              className="bg-red-500 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-red-600 transition duration-300 ease-in-out"
-            >
-              Leave
-            </button>
-          </div>
-
-          {/* Stream View: Interviewer */}
-          {myStream && (
-            <div className="bg-gray-800 p-1 rounded-lg shadow-lg transform transition duration-300 ease-in-out hover:scale-105 relative">
-              <div className="relative rounded-md overflow-hidden shadow-inner">
-                <ReactPlayer
-                  playing
-                  height="240px"
-                  width="100%"
-                  url={myStream}
-                  className="rounded-md"
-                />
-                <h2 className="absolute top-0 left-0 right-0 text-2xl font-semibold text-center text-white opacity-70 p-2">
-                  Interviewer
-                </h2>
-              </div>
-            </div>
-          )}
-
-          {/* Stream View: Candidate */}
-          {remoteStream && (
-            <div className="bg-gray-800 p-1 rounded-lg shadow-lg transform transition duration-300 ease-in-out hover:scale-105 relative">
-              <div className="relative rounded-md overflow-hidden shadow-inner">
-                <ReactPlayer
-                  playing
-                  height="240px"
-                  width="100%"
-                  url={remoteStream}
-                  className="rounded-md"
-                />
-                <h2 className="absolute top-0 left-0 right-0 text-2xl font-semibold text-center text-white opacity-70 p-2">
-                  Candidate
-                </h2>
-              </div>
-            </div>
-          )}
-
-          <h4
-            className={`text-xl font-bold mb-6 text-center transition-all duration-300 ease-in-out transform ${
-              remoteSocketId
-                ? "text-green-400 opacity-50 animate-pulse"
-                : "text-red-500 opacity-50"
-            }`}
-          >
-            {remoteSocketId ? "✅ Connected" : "⚠️ No one in the room"}
-          </h4>
-
-          {/* Client List */}
-          <div className="flex items-center justify-center space-x-2 mx-auto">
-            {clients.map(({ socketId, email }) => (
-              <Client email={email} key={socketId} />
-            ))}
-          </div>
-
-          {/* Buttons: Send Stream & Call */}
-          <div className="flex space-x-4 justify-center mb-6">
-            {myStream && (
-              <button
-                onClick={sendStreams}
-                className="bg-green-600 hover:bg-green-700 px-6 py-2 rounded-lg shadow-md transition duration-300"
-              >
-                Send Stream
-              </button>
-            )}
-            {remoteSocketId && (
-              <button
-                onClick={handleCallUser}
-                className="bg-blue-600 hover:bg-blue-700 px-6 py-2 rounded-lg shadow-md transition duration-300"
-              >
-                CALL
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
+  return <div ref={editorRef} className="border border-gray-200 h-full"></div>;
+});
 
 export default CodeEditor;

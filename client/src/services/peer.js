@@ -11,6 +11,31 @@ class PeerService {
           },
         ],
       });
+      this.screenStream = null; // Track for screen sharing stream
+    }
+  }
+
+  // Start screen sharing
+  async startScreenShare() {
+    try {
+      this.screenStream = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+      });
+      this.screenStream.getTracks().forEach((track) => {
+        this.peer.addTrack(track, this.screenStream); // Add screen track to peer connection
+      });
+      return this.screenStream;
+    } catch (error) {
+      console.error("Error starting screen share: ", error);
+      throw error;
+    }
+  }
+
+  // Stop screen sharing
+  stopScreenShare() {
+    if (this.screenStream) {
+      this.screenStream.getTracks().forEach((track) => track.stop()); // Stop all screen tracks
+      this.screenStream = null;
     }
   }
 

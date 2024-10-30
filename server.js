@@ -5,14 +5,15 @@ const dotenv = require("dotenv");
 dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 8000;
+
 app.use(
   cors({
-    origin: "*", // Allow all origins, you can restrict it by specifying allowed domains
+    origin: "*",
     methods: ["GET", "POST"],
     allowedHeaders: ["Content-Type"],
   })
 );
-// Initialize server on port 8000
+
 const io = new Server(
   app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
@@ -77,11 +78,11 @@ io.on("connection", (socket) => {
     io.to(to).emit("incomming:call", { from: socket.id, offer });
   });
 
-  socket.on("code:change", ({ roomId, code, cursorPosition }) => {
+  socket.on("code:change", ({ roomId, code }) => {
     // Emit code change and cursor position to all other users in the room
-    socket.broadcast.to(roomId).emit("code:change", { code, cursorPosition });
+    socket.broadcast.to(roomId).emit("code:change", { code });
   });
-
+  
   socket.on("call:accepted", ({ to, ans }) => {
     io.to(to).emit("call:accepted", { from: socket.id, ans });
   });
